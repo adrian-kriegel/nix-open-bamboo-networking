@@ -1,0 +1,81 @@
+{
+  "nodes": {
+    "cjson-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1715595975,
+        "narHash": "sha256-UgUWc/+Zie2QNijxKK5GFe4Ypk97EidG8nTiiHhn5Ys=",
+        "owner": "DaveGamble",
+        "repo": "cJSON",
+        "rev": "acc76239bee01d8e9c858ae2cab296704e52d916",
+        "type": "github"
+      },
+      "original": {
+        "owner": "DaveGamble",
+        "ref": "v1.7.18",
+        "repo": "cJSON",
+        "type": "github"
+      }
+    },
+    "mosquitto-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1770629342,
+        "narHash": "sha256-Zl55yjuzQY2fyaKs/zLaJ7a3OONKTDQPaT+DpPURdZI=",
+        "owner": "eclipse-mosquitto",
+        "repo": "mosquitto",
+        "rev": "99fa50f30e325609394c324c8ff71cfbbe95d8ab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "eclipse-mosquitto",
+        "ref": "v2.1.2",
+        "repo": "mosquitto",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1785454630,
+        "narHash": "sha256-LQy14TZp77TwbQf40gg1V3jo8FwJG0jGDkAH+zRHqg8=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "1559d3daa3ecc813a650b79375ea61b6741b8746",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "obn-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782591941,
+        "narHash": "sha256-bxkOwCnlKu2fA3cEiTZq15anSwLkuJIyko19wqul6Fw=",
+        "owner": "ClusterM",
+        "repo": "open-bamboo-networking",
+        "rev": "ae98a374eae81d641d37cf01aa7b2e5a7c44bf4c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ClusterM",
+        "ref": "v1.1.0",
+        "repo": "open-bamboo-networking",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "cjson-src": "cjson-src",
+        "mosquitto-src": "mosquitto-src",
+        "nixpkgs": "nixpkgs",
+        "obn-src": "obn-src"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
