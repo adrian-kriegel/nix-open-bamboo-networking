@@ -1,5 +1,5 @@
 {
-  description = "Nix flake for the open-bamboo-networking plugin for OrcaSlicer.";
+  description = "Open Bamboo Networking packages and patched slicer overlay.";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -20,14 +20,14 @@
     };
   };
 
-  outputs = {
-    self,
-    nixpkgs,
-    obn-src,
-    mosquitto-src,
-    cjson-src,
-    ...
-  }:
+  outputs =
+    {
+      nixpkgs,
+      obn-src,
+      mosquitto-src,
+      cjson-src,
+      ...
+    }:
     let
       lib = nixpkgs.lib;
       systems = [
@@ -35,142 +35,81 @@
         "aarch64-linux"
       ];
       forAllSystems = lib.genAttrs systems;
-      configured-obn-abi-version = import ./plugin-version.nix;
+      configured-orca-plugin-version = import ./plugin-version.nix;
 
-      mkPackage = {
-        system,
-        obn-abi-version ? configured-obn-abi-version,
-      }:
+      obn-overlay = import ./overlays/open-bamboo-networking.nix {
+        inherit
+          cjson-src
+          mosquitto-src
+          obn-src
+          ;
+        orca-plugin-version = configured-orca-plugin-version;
+      };
+
+      orca-slicer-overlay = import ./overlays/orca-slicer.nix;
+      bambu-studio-overlay = import ./overlays/bambu-studio.nix;
+
+      allOverlays = lib.composeManyExtensions [
+        obn-overlay
+        orca-slicer-overlay
+        bambu-studio-overlay
+      ];
+
+      pkgsFor = system: import nixpkgs { inherit system; overlays = [ allOverlays ]; };
+
+      mkPackage =
+        {
+          system,
+          client ? "orca",
+          obn-abi-version ? null,
+        }:
         let
           pkgs = import nixpkgs { inherit system; };
+          bambu-version-parts = lib.take 3 (lib.splitString "." pkgs.bambu-studio.version);
+          default-plugin-version =
+            if client == "orca" then
+              configured-orca-plugin-version
+            else
+              "${lib.concatStringsSep "." bambu-version-parts}.99";
+          resolved-plugin-version =
+            if obn-abi-version == null then default-plugin-version else obn-abi-version;
         in
         pkgs.callPackage ./package.nix {
           inherit
             cjson-src
+            client
             mosquitto-src
             obn-src
-            obn-abi-version
-          ;
+            ;
+          obn-abi-version = resolved-plugin-version;
         };
     in
     {
+      overlays = {
+        default = obn-overlay;
+        all = allOverlays;
+      };
+
       packages = forAllSystems (
         system:
         let
-          package = mkPackage { inherit system; };
+          pkgs = pkgsFor system;
         in
         {
-          default = package;
-          open-bamboo-networking = package;
+          default = pkgs.open-bamboo-networking;
+          open-bamboo-networking-orca-slicer = pkgs.open-bamboo-networking-orca-slicer;
+          open-bamboo-networking-bambu-studio = pkgs.open-bamboo-networking-bambu-studio;
+          orca-slicer = pkgs.orca-slicer;
+          bambu-studio = pkgs.bambu-studio;
         }
       );
 
       apps = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
-          package = self.packages.${system}.default;
-          obn-abi-version = package.obn-abi-version;
-          pluginPath = "${package}/plugins/libbambu_networking_${obn-abi-version}.so";
-
-          installer = pkgs.writeShellApplication {
-            name = "install-open-bamboo-networking";
-            runtimeInputs = [
-              pkgs.coreutils
-              pkgs.python3
-            ];
-            text = ''
-              target="''${1:-''${ORCA_CONFIG_DIR:-$HOME/.config/OrcaSlicer}}"
-              plugin_dir="$target/plugins"
-              timestamp="$(date +%Y%m%d-%H%M%S)"
-
-              mkdir -p "$plugin_dir"
-
-              install_library() {
-                source_path="$1"
-                destination="$plugin_dir/$(basename "$source_path")"
-
-                if [[ -e "$destination" ]]; then
-                  cp -a "$destination" "$destination.backup-$timestamp"
-                fi
-
-                install -m 0755 "$source_path" "$destination"
-                echo "Installed $destination"
-              }
-
-              install_library \
-                "${package}/plugins/libbambu_networking_${obn-abi-version}.so"
-              install_library "${package}/plugins/libBambuSource.so"
-
-              live_source="${package}/plugins/liblive555.so"
-              live_destination="$plugin_dir/liblive555.so"
-              if [[ ! -e "$live_destination" ]] || \
-                 [[ "$(stat -c %s "$live_destination")" -le 65536 ]]; then
-                install_library "$live_source"
-              else
-                echo "Keeping existing vendor live555: $live_destination"
-              fi
-
-              conf="$target/OrcaSlicer.conf"
-              if [[ ! -f "$conf" ]]; then
-                cat >&2 <<MESSAGE
-Plugin files were installed, but $conf does not exist.
-Launch OrcaSlicer once, close it, and run this installer again so the
-network-plugin selection can be patched safely.
-MESSAGE
-                exit 0
-              fi
-
-              python3 - "$conf" "${obn-abi-version}" <<'PYCODE'
-import json
-import os
-import re
-import shutil
-import stat
-import sys
-from pathlib import Path
-
-conf = Path(sys.argv[1])
-version = sys.argv[2]
-original = conf.read_text(encoding="utf-8")
-body = re.sub(
-    r"(?:\r?\n)+# MD5 checksum[^\r\n]*(?:\r?\n)*\Z",
-    "",
-    original,
-)
-data = json.loads(body)
-app = data.get("app")
-if not isinstance(app, dict):
-    raise SystemExit('OrcaSlicer.conf has no top-level JSON object named "app"')
-
-app["installed_networking"] = "true"
-app["network_plugin_version"] = version
-app["network_plugin_remind_later"] = "true"
-
-skipped = app.get("network_plugin_skipped_versions")
-if isinstance(skipped, str):
-    app["network_plugin_skipped_versions"] = ";".join(
-        item for item in skipped.split(";") if item and item != version
-    )
-
-backup = conf.with_name(conf.name + ".obn-bak")
-shutil.copy2(conf, backup)
-rendered = json.dumps(data, indent=4, ensure_ascii=False)
-rendered += "\n# MD5 checksum 00000000000000000000000000000000\n"
-
-temporary = conf.with_name(conf.name + ".obn-tmp")
-temporary.write_text(rendered, encoding="utf-8")
-os.chmod(temporary, stat.S_IMODE(conf.stat().st_mode))
-temporary.replace(conf)
-
-print(f"Patched {conf}")
-print(f"Backup: {backup}")
-PYCODE
-
-              echo "Orca network plugin version: ${obn-abi-version}"
-              echo "Restart OrcaSlicer before opening the Device page."
-            '';
-          };
+          pkgs = pkgsFor system;
+          package = pkgs.open-bamboo-networking-orca-slicer;
+          pluginPath = "${package}/plugins/${package.plugin-filename}";
 
           status = pkgs.writeShellApplication {
             name = "obn-status";
@@ -270,11 +209,7 @@ PYCODE
         {
           default = {
             type = "app";
-            program = "${installer}/bin/install-open-bamboo-networking";
-          };
-          install = {
-            type = "app";
-            program = "${installer}/bin/install-open-bamboo-networking";
+            program = "${probe}/bin/obn-probe";
           };
           probe = {
             type = "app";
@@ -298,34 +233,33 @@ PYCODE
           };
         }
       );
+
       devShells = forAllSystems (
         system:
         let
-          pkgs = import nixpkgs { inherit system; };
+          pkgs = pkgsFor system;
         in
         {
           default = pkgs.mkShell {
-            inputsFrom = [ self.packages.${system}.default ];
+            inputsFrom = [
+              pkgs.open-bamboo-networking-orca-slicer
+              pkgs.open-bamboo-networking-bambu-studio
+            ];
             packages = [
               pkgs.gdb
               pkgs.git
             ];
 
-            OBN_CLIENT_TYPE = "orca_slicer";
-            OBN_VERSION = configured-obn-abi-version;
+            OBN_ORCA_VERSION = pkgs.open-bamboo-networking-orca-slicer.obn-abi-version;
+            OBN_BAMBU_STUDIO_VERSION =
+              pkgs.open-bamboo-networking-bambu-studio.obn-abi-version;
             OBN_MOSQUITTO_SOURCE = mosquitto-src;
             OBN_CJSON_SOURCE = cjson-src;
           };
         }
       );
 
-      formatter = forAllSystems (
-        system:
-        let
-          pkgs = import nixpkgs { inherit system; };
-        in
-        pkgs.nixfmt-rfc-style
-      );
+      formatter = forAllSystems (system: (pkgsFor system).nixfmt-rfc-style);
 
       lib.mkOpenBambooNetworking = mkPackage;
     };

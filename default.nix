@@ -11,16 +11,28 @@
   obn-src,
   mosquitto-src,
   cjson-src,
+  client ? "orca_slicer",
   obn-abi-version ? "02.03.00.99",
 }:
 
+assert lib.assertMsg (builtins.elem client [
+  "bambu_studio"
+  "orca_slicer"
+]) "client ${client} is not supported. Choose either \"bambu_studio\" or \"orca_slicer\"";
 assert lib.assertMsg
   (builtins.match "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+" obn-abi-version != null)
   "obn-abi-version must have the form MM.mm.pp.rr, for example 02.03.00.99";
 
-stdenv.mkDerivation (finalAttrs: {
-  pname = "open-bamboo-networking-orca";
-  version = obn-abi-version;
+let
+  plugin-filename =
+    if client == "orca_slicer" then
+      "libbambu_networking_${obn-abi-version}.so"
+    else
+      "libbambu_networking.so";
+in
+stdenv.mkDerivation(finalAttrs: {
+  pname = "open-bamboo-networking-${client}";
+  version = "1.1.0";
 
   src = obn-src;
 
@@ -42,7 +54,7 @@ stdenv.mkDerivation (finalAttrs: {
   cmakeBuildType = "RelWithDebInfo";
 
   cmakeFlags = [
-    "-DOBN_CLIENT_TYPE=orca_slicer"
+    "-DOBN_CLIENT_TYPE=${client}"
     "-DOBN_VERSION=${obn-abi-version}"
     "-DOBN_RELEASE=ON"
     "-DOBN_PATCH_CLIENT_CONF=OFF"
@@ -64,7 +76,7 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   doCheck = true;
-  
+
   checkPhase = ''
     runHook preCheck
     # exclude tests that run agains real devices 
@@ -74,12 +86,12 @@ stdenv.mkDerivation (finalAttrs: {
   '';
 
   postInstall = ''
-    test -f "$out/plugins/libbambu_networking_${obn-abi-version}.so"
+    test -f "$out/plugins/${plugin-filename}"
     test -f "$out/plugins/libBambuSource.so"
 
     mkdir -p "$out/share/open-bamboo-networking" "$out/bin"
     printf '%s\n' '${obn-abi-version}' \
-      > "$out/share/open-bamboo-networking/orca-plugin-version"
+      > "$out/share/open-bamboo-networking/plugin-version"
 
     # install live tests so we can run them manually
     install -m 0755 ./probe_plugin "$out/bin/obn-probe-plugin"
@@ -88,12 +100,21 @@ stdenv.mkDerivation (finalAttrs: {
     install -m 0755 ./ssdp_listener_test "$out/bin/obn-ssdp-listener-test"
   '';
 
-  passthru = {
-    inherit obn-abi-version;
+  passthru = let 
+    self = finalAttrs.finalPackage; 
+  in {
+    inherit
+      client
+      obn-abi-version
+      plugin-filename
+    ;
+
+    plugin-so = "${self}/plugins/${plugin-filename}";
+    bambu-source-so = "${self}/plugins/libBambuSource.so";
   };
 
   meta = {
-    description = "Open-source LAN-first Bambu networking plugin and diagnostics for OrcaSlicer";
+    description = "Open-source LAN-first Bambu networking plugin for ${client}";
     homepage = "https://github.com/ClusterM/open-bamboo-networking";
     license = lib.licenses.agpl3Only;
     platforms = lib.platforms.linux;

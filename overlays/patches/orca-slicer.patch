@@ -1,0 +1,99 @@
+diff --git a/resources/web/guide/5/5.js b/resources/web/guide/5/5.js
+index b537501..937b939 100644
+--- a/resources/web/guide/5/5.js
++++ b/resources/web/guide/5/5.js
+@@ -1,7 +1,7 @@
+ 
+ function OnInit()
+ {
+-	TranslatePage();
++	FinishGuide(); return;
+ 	
+ 	SendInstallPluginCheck();
+ }
+diff --git a/src/libslic3r/AppConfig.cpp b/src/libslic3r/AppConfig.cpp
+index e84f469..5e8d1e1 100644
+--- a/src/libslic3r/AppConfig.cpp
++++ b/src/libslic3r/AppConfig.cpp
+@@ -1580,7 +1580,7 @@ std::string AppConfig::get_nozzle_volume_types_from_config(const std::string& pr
+ 
+ std::string AppConfig::get_network_plugin_version() const
+ {
+-    return get(SETTING_NETWORK_PLUGIN_VERSION);
++    return "@obn_plugin_version@";
+ }
+ 
+ void AppConfig::set_network_plugin_version(const std::string& version)
+diff --git a/src/libslic3r/AppConfig.hpp b/src/libslic3r/AppConfig.hpp
+index 2c83ebb..55cb427 100644
+--- a/src/libslic3r/AppConfig.hpp
++++ b/src/libslic3r/AppConfig.hpp
+@@ -128,7 +128,7 @@ public:
+ 	std::string 		get(const std::string &key) const
+ 		{ std::string value; this->get("app", key, value); return value; }
+ 	bool				get_bool(const std::string &section, const std::string &key) const
+-		{ return this->get(section, key) == "true" || this->get(key) == "1"; }
++		{ return (section == "app" && key == "installed_networking") || this->get(section, key) == "true" || this->get(key) == "1"; }
+ 	bool				get_bool(const std::string &key) const
+ 		{ return this->get_bool("app", key); }
+ 	void			    set(const std::string &section, const std::string &key, const std::string &value)
+diff --git a/src/slic3r/GUI/WebGuideDialog.cpp b/src/slic3r/GUI/WebGuideDialog.cpp
+index 0d2f6c7..d86596a 100644
+--- a/src/slic3r/GUI/WebGuideDialog.cpp
++++ b/src/slic3r/GUI/WebGuideDialog.cpp
+@@ -1290,9 +1290,9 @@ int GuideFrame::SaveProfileData()
+         m_Region = wxGetApp().app_config->get("region");
+         m_ProfileJson["region"] = m_Region;
+ 
+-        m_ProfileJson["network_plugin_install"] = wxGetApp().app_config->get("app","installed_networking");
+-        m_ProfileJson["network_plugin_compability"] = wxGetApp().is_compatibility_version() ? "1" : "0";
+-        network_plugin_ready = wxGetApp().is_compatibility_version();
++        m_ProfileJson["network_plugin_install"] = "1";
++        m_ProfileJson["network_plugin_compability"] = "1";
++        network_plugin_ready = true;
+ 
+         StealthMode = wxGetApp().app_config->get_bool("app","stealth_mode");
+         m_ProfileJson["stealth_mode"] = StealthMode;
+diff --git a/src/slic3r/Utils/BBLNetworkPlugin.cpp b/src/slic3r/Utils/BBLNetworkPlugin.cpp
+index 142b2a4..127d694 100644
+--- a/src/slic3r/Utils/BBLNetworkPlugin.cpp
++++ b/src/slic3r/Utils/BBLNetworkPlugin.cpp
+@@ -105,12 +105,7 @@ int BBLNetworkPlugin::initialize(bool using_backup, const std::string& version)
+ #if defined(_MSC_VER) || defined(_WIN32)
+     library = plugin_folder.string() + "\\" + std::string(BAMBU_NETWORK_LIBRARY) + "_" + version + ".dll";
+ #else
+-    #if defined(__WXMAC__)
+-    std::string lib_ext = ".dylib";
+-    #else
+-    std::string lib_ext = ".so";
+-    #endif
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_NETWORK_LIBRARY) + "_" + version + lib_ext;
++    library = "@obn_plugin_path@";
+ #endif
+ 
+ #if defined(_MSC_VER) || defined(_WIN32)
+@@ -305,11 +300,7 @@ void* BBLNetworkPlugin::get_source_module()
+         m_source_module = LoadLibrary(lib_wstr);
+     }
+ #else
+-#if defined(__WXMAC__)
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_SOURCE_LIBRARY) + ".dylib";
+-#else
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_SOURCE_LIBRARY) + ".so";
+-#endif
++    library = "@obn_bambu_source_path@";
+     m_source_module = dlopen(library.c_str(), RTLD_LAZY);
+ #endif
+ 
+@@ -368,10 +359,8 @@ std::string BBLNetworkPlugin::get_versioned_library_path(const std::string& vers
+ 
+ #if defined(_MSC_VER) || defined(_WIN32)
+     return (plugin_folder / (std::string(BAMBU_NETWORK_LIBRARY) + "_" + version + ".dll")).string();
+-#elif defined(__WXMAC__)
+-    return (plugin_folder / (std::string("lib") + std::string(BAMBU_NETWORK_LIBRARY) + "_" + version + ".dylib")).string();
+ #else
+-    return (plugin_folder / (std::string("lib") + std::string(BAMBU_NETWORK_LIBRARY) + "_" + version + ".so")).string();
++    return "@obn_plugin_path@";
+ #endif
+ }
+

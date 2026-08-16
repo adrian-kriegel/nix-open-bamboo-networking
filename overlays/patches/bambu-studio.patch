@@ -1,0 +1,65 @@
+diff --git a/resources/web/guide/5/5.js b/resources/web/guide/5/5.js
+index b537501..937b939 100644
+--- a/resources/web/guide/5/5.js
++++ b/resources/web/guide/5/5.js
+@@ -1,7 +1,7 @@
+ 
+ function OnInit()
+ {
+-	TranslatePage();
++	FinishGuide(); return;
+ 	
+ 	SendInstallPluginCheck();
+ }
+diff --git a/src/slic3r/GUI/WebGuideDialog.cpp b/src/slic3r/GUI/WebGuideDialog.cpp
+index d9a07bc..439bd55 100644
+--- a/src/slic3r/GUI/WebGuideDialog.cpp
++++ b/src/slic3r/GUI/WebGuideDialog.cpp
+@@ -1301,9 +1301,9 @@ int GuideFrame::SaveProfileData()
+         m_Region = wxGetApp().app_config->get("region");
+         m_ProfileJson["region"] = m_Region;
+ 
+-        m_ProfileJson["network_plugin_install"] = wxGetApp().app_config->get("app","installed_networking");
+-        m_ProfileJson["network_plugin_compability"] = wxGetApp().is_compatibility_version() ? "1" : "0";
+-        network_plugin_ready = wxGetApp().is_compatibility_version();
++        m_ProfileJson["network_plugin_install"] = "1";
++        m_ProfileJson["network_plugin_compability"] = "1";
++        network_plugin_ready = true;
+     }
+     catch (std::exception &e) {
+         //wxLogMessage("GUIDE: load_profile_error  %s ", e.what());
+diff --git a/src/slic3r/Utils/NetworkAgent.cpp b/src/slic3r/Utils/NetworkAgent.cpp
+index 855f5cc..26bea43 100644
+--- a/src/slic3r/Utils/NetworkAgent.cpp
++++ b/src/slic3r/Utils/NetworkAgent.cpp
+@@ -244,13 +244,13 @@ int NetworkAgent::initialize_network_module(bool using_backup, bool validate_cer
+     }
+ #else
+     #if defined(__WXMAC__)
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_NETWORK_LIBRARY) + ".dylib";
++    library = "@obn_plugin_path@";
+     #else
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_NETWORK_LIBRARY) + ".so";
++    library = "@obn_plugin_path@";
+     #endif
+     BOOST_LOG_TRIVIAL(info) << __FUNCTION__ << boost::format(", line %1%, loading network module, using_backup %2%\n")%__LINE__ %using_backup;
+-    module_cert_summary = SummarizeModule(library);
+-    if (self_cert_summary) {
++    // The open plugin is not signed by Bambu Lab.
++    if (false) {
+         module_cert_summary = SummarizeModule(library);
+         if (module_cert_summary) {
+             if (IsSamePublisher(*self_cert_summary, *module_cert_summary))
+@@ -558,9 +558,9 @@ void* NetworkAgent::get_bambu_source_entry()
+     }
+ #else
+ #if defined(__WXMAC__)
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_SOURCE_LIBRARY) + ".dylib";
++    library = "@obn_bambu_source_path@";
+ #else
+-    library = plugin_folder.string() + "/" + std::string("lib") + std::string(BAMBU_SOURCE_LIBRARY) + ".so";
++    library = "@obn_bambu_source_path@";
+ #endif
+     source_module = dlopen( library.c_str(), RTLD_LAZY);
+     /*if (!source_module) {
+
